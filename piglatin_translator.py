@@ -5,6 +5,7 @@ from nltk.corpus import words as nltk_words
 
 class TokenType:
     WORD = 'WORD'
+    NUMBER = 'NUMBER'
     PUNCTUATION = 'PUNCTUATION'
     EOF = 'EOF'
 
@@ -22,7 +23,10 @@ class Lexer:
 
     def advance(self):
         self.pos += 1
-        self.current_char = self.text[self.pos] if self.pos < len(self.text) else None
+        if self.pos < len(self.text):
+            self.current_char = self.text[self.pos]
+        else:
+            self.current_char = None
 
     def skip_whitespace(self):
         while self.current_char is not None and self.current_char.isspace():
@@ -32,24 +36,34 @@ class Lexer:
         result = ''
         while self.current_char is not None and self.current_char.isalpha():
             result += self.current_char
-            self.advance()  # Move to the next character
+            self.advance()
         if len(result) > 0:  # Ensure a valid word is captured before returning
             return result
         else:
             return ''
 
+    def number(self):
+        result = ''
+        while self.current_char is not None and self.current_char.isdigit():
+            result += self.current_char
+            self.advance()
+        return result if result else None
+
     def get_next_token(self):
         while self.current_char is not None:
-            # print("Current character:", self.current_char)  # Debug statement
             if self.current_char.isspace():
                 self.skip_whitespace()
                 continue
 
             if self.current_char.isalpha():
                 word = self.word()
-                # print("Detected word:", word)  # Debug statement
                 if word.lower() in self.english_words:
                     return Token(TokenType.WORD, word)
+
+            if self.current_char.isdigit():
+                num = self.number()
+                if num:
+                    return Token(TokenType.NUMBER, num)
 
             if self.current_char in '.,?!':
                 token_value = self.current_char
@@ -62,6 +76,9 @@ class Lexer:
 
     def isalpha(self, char):
         return char.isalpha()
+    
+    def error(self):
+        raise Exception('Invalid syntax')
 
 class Parser:
     def __init__(self, lexer):
@@ -73,16 +90,19 @@ class Parser:
 
     def factor(self):
         token = self.current_token
-        # print("Current token:", token.type, token.value)  # Debug statement
+
         if token.type == TokenType.WORD:
             translated_word = self.translate_word_to_pig_latin(token.value)
-            # print("Translated word:", translated_word)  # Debug statement
             self.current_token = self.lexer.get_next_token()
             return translated_word
+        elif token.type == TokenType.NUMBER:
+            # For numbers, just return the number itself
+            num = token.value
+            self.current_token = self.lexer.get_next_token()
+            return num
         elif token.type == TokenType.PUNCTUATION:
             self.current_token = self.lexer.get_next_token()
             return token.value
-
 
     def term(self):
         result = self.factor()
@@ -95,7 +115,7 @@ class Parser:
     def expr(self):
         result = self.term()
 
-        while self.current_token.type == TokenType.WORD:
+        while self.current_token.type == TokenType.WORD or self.current_token.type == TokenType.NUMBER:
             result += ' ' + self.term()
 
         return result
@@ -113,15 +133,6 @@ class Parser:
             return word  # Return the word as-is if it's empty
 
 
-# text_to_translate = "Hello, this is a test sentence."
-# lexer = Lexer(text_to_translate)
-# parser = Parser(lexer)
-# translated_text = parser.expr()
-# print(translated_text)  # Output: "elloHay, isthay isway away esttay entencesay."
-
-
-
-
 def main():
     while True:
         try:
@@ -133,7 +144,6 @@ def main():
             continue
         elif text.lower() == "exit":
             break
-            
 
         lexer = Lexer(text)
         parser = Parser(lexer)
